@@ -1,6 +1,6 @@
 # Decrapify
 
-Execute the script to decrapofiy windows 10 18xx/19xx. Use this:
+Execute the script to decrapify windows 10 18xx/19xx. Use this:
 
 ```
  .\decrapfy.ps1 -onedrive -tablet
