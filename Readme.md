@@ -2,7 +2,7 @@
 
 Execute the script to decrapify windows 10 18xx/19xx. Use this:
 
-```posh
+```powershell
  .\decrapfy.ps1 -onedrive -tablet
 ```
 
@@ -19,4 +19,3 @@ Execute the script to decrapify windows 10 18xx/19xx. Use this:
 # References
 
 https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet
-
