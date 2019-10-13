@@ -2,7 +2,7 @@
 
 Execute the script to decrapify windows 10 18xx/19xx. Use this:
 
-```
+```posh
  .\decrapfy.ps1 -onedrive -tablet
 ```
 
