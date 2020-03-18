@@ -1,3 +1,10 @@
+function global:prompt {
+    $PwdPath = Split-Path -Path $pwd -Leaf
+    Write-Host -Object "$PwdPath" -NoNewline -ForegroundColor Magenta
+
+    return "> "
+}
+
 Function kgp_function {
    $a = $args
    if ($args -eq "."){ $a = $pwd }
