@@ -1,0 +1,154 @@
+#!/bin/bash  
+#https://blog.jreypo.io/containers/microsoft/azure/cloud/cloud-native/devops/deploying-a-kubernetes-cluster-in-azure-using-kubeadm/
+#https://msazure.club/k8s-in-multiple-zones-on-azure-with-calico-and-ipvs/
+#https://github.com/kubernetes-sigs/cloud-provider-azure
+#https://medium.com/@shuanglu1993/how-to-create-a-k8s-cluster-with-kubeadm-on-azure-357210e2eb50
+#https://medium.com/swlh/using-the-azure-kubernetes-provider-in-a-vm-based-k8s-cluster-fdf941b86d69
+
+clustername=dev
+clusterdnszone=''
+resourcegroupname="rgp-p-we1-aziredevops-net-dev"
+location='northeurope'
+vnetwork='vnet-p-we1-01'
+subnet="$vnetwork-pubint" #sub-p-we1-pubint1-44.130.44.0-23
+adminuser='k8s'
+vmname="k8s-master-$clustername"
+vmssprefix="k8s-vmss-"
+vmss="$vmssprefix$clustername"
+password='fake!P1ssword' #####################
+#$nsg = "nsg-devuat"
+
+echo "Creating Resource group"
+az group create  --name $resourcegroupname --location $location
+
+echo "Creating vnet/subnet"
+az network vnet create --name $vnetwork --resource-group $resourcegroupname --location $location --address-prefixes 172.10.0.0/16 --subnet-name $subnet --subnet-prefixes 172.10.1.0/24
+
+echo "Creating Kubernetes Master"
+subnetid=$(az network vnet show --name $vnetwork -g $resourcegroupname --query subnets[0].id -o tsv)
+
+az vm create  --name $vmname  \
+        --resource-group $resourcegroupname \
+        --location $location \
+        --image UbuntuLTS \
+        --admin-user $adminuser \
+        --admin-password $password \
+        --size Standard_B2s \
+        --data-disk-sizes-gb 30 \
+        --subnet $subnetid
+        #--nsg $nsg
+
+az vmss create --name $vmss \
+                --resource-group $resourcegroupname \
+                --computer-name-prefix $vmssprefix \
+                --instance-count 2 \
+                --location $location \
+                --image UbuntuLTS \
+                --admin-user $adminuser \
+                --admin-password $password \
+                --vm-sku Standard_B4ms \
+                --data-disk-sizes-gb 30 \
+                --subnet $subnetid
+
+#az vm extension wait --exists --vm-name $vmname --resource-group $resourcegroupname --name vmextension
+
+#az vm delete --name k8s-master-net-test --resource-group rgp-p-we1-aziredevops-net-test
+
+#az account list
+
+#installing azure-devops extension https://github.com/Azure/azure-devops-cli-extension
+#az extension add --name azure-devops
+
+ip=$(az vm show --name $vmname --resource-group $resourcegroupname --show-details -d --query "privateIps" -o tsv)
+
+echo "ssh $adminuser@$ip"
+
+#https://github.com/Azure/azure-linux-extensions
+az vmss extension set --vmss-name $vmss --resource-group $resourcegroupname --publisher Microsoft.VisualStudio.Services --name TeamServicesAgentLinux \
+         --protected-settings "{'PATToken':'plutqfgsaqoa4xoyte4zpgqyjrkvf7gbvaxqufq4jlr2jgeaauyq'}" \
+         --settings "{'VSTSAccountUrl':'https://dev.azure.com/miquelparejo','TeamProject':'test','DeploymentGroup':'test','Tags':'net-test,k8s,k8s-nodes'}"
+
+#plutqfgsaqoa4xoyte4zpgqyjrkvf7gbvaxqufq4jlr2jgeaauyq
+
+
+#kubeadm join 172.10.1.4:6443 --token azkomu.w8o19vprar1nain9 \
+#--discovery-token-ca-cert-hash sha256:821877041e7ad00cb9baef3787fd91eaba21e8bd24541e8b00c6d1c7ea214d41
+
+#az extension list-available
+
+ k=$(cat $HOME/.kube/config)
+
+generate_post_data()
+{
+  cat <<EOF
+{
+        "username": "AzureDevOpsK8sRelease",
+        "text": "Cluster $(clustername) created with the following configuration (ip included): \n $k",
+        "icon_emoji":":cloud:",
+     "blocks": [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "Danny Torrence left the following review for your property:"
+            }
+        } ]
+}
+EOF
+}
+
+clustername=devsandbox
+generate_post_data()
+{
+  cat <<EOF
+
+{
+    "username":"AzureDevOpsK8sRelease",
+    "text":"New k8s cluster created",
+    "blocks": [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "Cluster name: *55555$(clustername)* "
+            }
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "```$'apiVersion: v1\nclusters:\n- cluster:\n    certificate-authority-data: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUN5RENDQWJDZ0F3SUJBZ0lCQURBTkJna3Foa2lHOXcwQkFRc0ZBREFWTVJNd0VRWURWUVFERXdwcmRXSmwKY201bGRHVnpNQjRYRFRJd01ETXlPVEV4TWpFME5Wb1hEVE13TURNeU56RXhNakUwTlZvd0ZURVRNQkVHQTFVRQpBeE1LYTNWaVpYSnVaWFJsY3pDQ0FTSXdEUVlKS29aSWh2Y05BUUVCQlFBRGdnRVBBRENDQVFvQ2dnRUJBTTJ6Ck9xOVY1SThGbEl5UXIyY3Z5dGFYSEhUVlBXZTFTaUROUms4ZmRmQ29adjUycnNNZUlXSDNXY3Q4NXZGZjJ6NGwKOWUzT1Q3azJaajB2aTRvbytsbXFlTlVqUU83SitmNXBaS2lNek10ZmRzOG1ZU1lmbmd3aW9wSXJMUTFCSy9BSwozaUdmYWJndHFyY2NQU2dxMHREbktEVFhzNEZFbGJhU0taVkNJRzZucEtCRjlHQTNobTMrNC9HK3VtVFpnZWhiClpnYnpGc3hzdktQRkE0V0N2OXFOcUNEQUl2UUlqanhhSVpVeFQ5dWp4MlZGckhuZ1U5Znl4czZjTHBieUJ1bk4KN2JqYmw1QktKMEk2REN3WVBWSHd5OVUwOTlNVExEcUREU3BuU3h2WUUzVWRDUC8zUHc5MG0yVVl1NE00ajN6ZQpoeU5JQTIwUEMyMGkvd2JnRi9FQ0F3RUFBYU1qTUNFd0RnWURWUjBQQVFIL0JBUURBZ0trTUE4R0ExVWRFd0VCCi93UUZNQU1CQWY4d0RRWUpLb1pJaHZjTkFRRUxCUUFEZ2dFQkFMWDEwSkFNUG1VY1hteXF1akNxV3cwVUI5ZjEKNzl5MWNiRGNndms5TEdBQ3cxWGlSdmt5K0hFbWVObVdmUkowa1crRCtuRCtjSnE1clFhSWppR010QzAwOGpMKwo4bVJIbWFHMG5uT3lqaWxiSmpwZzREa05YTC96NDE3SFVqM2ZLZ3puRjU5QXVaUVFXcWE5QThxaDJlUkcxTUdOCjBoNlh3elRwVlFyR2pFS1lNRGtRVTlkQTZPZFUwYTBVWXg2T29SRHBZeWpBc0loS2VLbEg1K1pJN0RnRTVyVmEKTlFYV1RpQncwVUthclQzV2dwV21TU2hvKy9POXV6VWR6d2xUWm9vNHk1bjB6aFkwVnU1VTJrcFZya3VBZ0R3SQpFRlQ4eUhXL2FaKzVYUlNjREJWTHZBanh4VEt2bjQ0bDhTaFdKMWt4Tm03WW9wMUs4M0pWNWdrYUxPbz0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=\n    server: https://44.130.44.6:6443\n  name: kubernetes\ncontexts:\n- context:\n    cluster: kubernetes\n    user: kubernetes-admin\n  name: kubernetes-admin@kubernetes\ncurrent-context: kubernetes-admin@kubernetes\nkind: Config\npreferences: {}\nusers:\n- name: kubernetes-admin\n  user:\n    client-certificate-data: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUM4akNDQWRxZ0F3SUJBZ0lJVnBqK1ZiRWZkM293RFFZSktvWklodmNOQVFFTEJRQXdGVEVUTUJFR0ExVUUKQXhNS2EzVmlaWEp1WlhSbGN6QWVGdzB5TURBek1qa3hNVEl4TkRWYUZ3MHlNVEF6TWpreE1USXhOVGhhTURReApGekFWQmdOVkJBb1REbk41YzNSbGJUcHRZWE4wWlhKek1Sa3dGd1lEVlFRREV4QnJkV0psY201bGRHVnpMV0ZrCmJXbHVNSUlCSWpBTkJna3Foa2lHOXcwQkFRRUZBQU9DQVE4QU1JSUJDZ0tDQVFFQTRrOXloY05yLzdQR2RXZnMKVkN2djZxN2RKdzZQNzl3c3hYa3JvSVM1T3ZLL3F6WlcrRjQ0Z2RhQUMydG1aWTJKSENxVFcyL3ZYWTg4STZvUwpNY0dvK0tpbU41WFYrVGxpdnNwcDJ1MVgvZzM4VFMzdlZ1dHJmTXI2dlFtTnc3ZTFLb3hBdGZabGV4aEVvR0p4CnB0bmcxZzJrTEgyN3Fia1FqbkFRdGlLVHRyREgxclNSalRrTWQ4UHF6YkR1UFg3ZTFGZ1YyL1pFb0dSSUY4eDgKcVdVbzNXdFBPT3o0bXVHZnV4OUN5UVROb01tc0p0anJKYzAycjcyeEN4djR1SzVFR0swMU03K3E3Z2RSS3R5SwpnWExnbm9jdjZwc0NPZ0JnczBQZFBmMjBUdmNPYklDejhHbjNXN3lUQytOa09nbW13VjJtVUtkeS9EWEJIMFg4Cm5aamJYd0lEQVFBQm95Y3dKVEFPQmdOVkhROEJBZjhFQkFNQ0JhQXdFd1lEVlIwbEJBd3dDZ1lJS3dZQkJRVUgKQXdJd0RRWUpLb1pJaHZjTkFRRUxCUUFEZ2dFQkFIbU04ZVZCSzRxZm5iK01DM01MQWNRVUZZSHFRZ0VKUm9PVQpUbVRRT2RIWENkYVZabmR1Ykl1L1B6TjBsWjJmUG5JemdtVCtJSWtKYjZvS1QvT2dSdzB1ZzB2SHF4alRBWWpECjNkMURiVTRYUTZ5Umx5SEdkV0RJbW5HaTEvT0UyWWhVVkQ3VEJSbWxBTUNnSW5ZMHJObk1RM2hqb2RrTnRhWlMKTEpLTEFJeUdtb1V1YmFwL1UzaXFsZkZBYVArNmdGTXZuV3QxYzNIdzRXS1lSdFJKSkpIUkR5YkZTcDhQQzY5eQpadUl1Zi9oTFVZVU1FeWpTM21DdUU0RENHcnZXZHNxZEtFSDlJNC83dElxbTZHWGtLdEx6OGYrWXBNM2pUYnUyCjF1dXk4UDdYY1VaS3hMc1J2cWxUY3FsODhUcnpPY08ydkpNQ2dRSVduRjFGZ0pXb1l3WT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=\n    client-key-data: LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFcFFJQkFBS0NBUUVBNGs5eWhjTnIvN1BHZFdmc1ZDdnY2cTdkSnc2UDc5d3N4WGtyb0lTNU92Sy9xelpXCitGNDRnZGFBQzJ0bVpZMkpIQ3FUVzIvdlhZODhJNm9TTWNHbytLaW1ONVhWK1RsaXZzcHAydTFYL2czOFRTM3YKVnV0cmZNcjZ2UW1OdzdlMUtveEF0ZlpsZXhoRW9HSnhwdG5nMWcya0xIMjdxYmtRam5BUXRpS1R0ckRIMXJTUgpqVGtNZDhQcXpiRHVQWDdlMUZnVjIvWkVvR1JJRjh4OHFXVW8zV3RQT096NG11R2Z1eDlDeVFUTm9NbXNKdGpyCkpjMDJyNzJ4Q3h2NHVLNUVHSzAxTTcrcTdnZFJLdHlLZ1hMZ25vY3Y2cHNDT2dCZ3MwUGRQZjIwVHZjT2JJQ3oKOEduM1c3eVRDK05rT2dtbXdWMm1VS2R5L0RYQkgwWDhuWmpiWHdJREFRQUJBb0lCQVFDRm1LRGlsaHFMT0hWUAptYW5KaHFaNncvK0pydThKaWRCa1FzT2VYcnQ2TVJNMDN6ODRIMmI4UHNRWCthN1pCRlNNYkJYUlJLTHBlRVRvClNOMjB3YjRlREhFVEgwRFJmeTdyc2xJTEMxR0dpSHNJbExWVmVtUlpwdm1kM3FYeGcrRk8zTHpXcmozNkRMbDIKZEtiaStIdmg0T3VwMkErUWdjOWtSb09YQVpKeHBZM1I1NFZjV3llN1dxZExoRWtrdzhNNE93c1djY3lsV1V6eApWZ0s2QzVLNDNlZ3B2Tmp1dmE2WXlNQm1EK0g2VkJIUWU2WDRTYk50YWN3L1hlV25mbENBSnlmYW04SnBKQkFECk9OSzVHWU1QNHB6Qmg5dVc3SFlnRk5oS1BUNy9ZNXB5dWhIbTZ3S0lRNEtaUS8rRU1taTY4cnBUKzE0K2tJY3gKbDk1b2syWUJBb0dCQU9XRmlHbE9EVjM5Nk1aWWlOWHd6bnZnWk05dnVuZ3l3MmFKWUIzZHZyZUsrZk5meXcvTwpCeDJTbWhPblRvWjNIWk5aZnlvYXNYRW01R0JTQmZFblNBd0V5N1JtbjN5dENtellGMTNuODFHODcxbXNSUWU4CnZsMXdvSUdQaFJ4ZVJQYncySTlTb3Y1b0gxSEpYSHVYdzcwcEhGRzhmUzNXOVdVTWtvZm84U1JKQW9HQkFQeHIKRTNEWmg0MUxkOUQ5TzNCVFlTUVhVc0FQZ29CQ0xtcm9tM1RzS2hCUU54ODlDd1h4d21NWVJlcmFDTTR3VFYzTgpETDN5Y1QwNnU3YURCaDJOeGZzYTdIWDlsMm00eXZjZTFZdU4rNnFPdzE5dFVCR1QzSUFiWklVd2pVaU8yaWNCCklkMnMxT0tYUU55enhGelQ2aVFvNkVHd1pUbjJrZGZ1RTBWRmxUSm5Bb0dBVnZkQnVLVGFhOExKY0Y0YmV2VEQKU0N5K0JkdFB6RHR2em1vL0FSSUVNWWQzTGNBZU1ON2YwMVM1RExsWUI1c2FtYnBQZEtTb2x6Y2xVVm5DNXB6NwpyNUloblRsRk5QaGIrdUhsK0s3cWd3NFRvdWFqUVV0QzFpVFdyRUMxTHdxSkZ3Z3JCaU5Kbnh2VXdpaUo0a3FlCjRBMnpyVVMrS2FCSld3Qm9oUmErU0FFQ2dZRUFzOS9oOUxNdkk0TTZHTlc4TzZsUE9oYmN3enpLTkhmMDkvNVcKZVpXcHpBSTlwYWNzYWNvRVNmV01MWFcrZktCeklYcnpyNUJMSGVUeXkzYkhMdHhPejBnNlpVS1hXYUYwRVhJSgpudTlJL2h2S0lnQ1Y1RkRIK3dxS01WZU45cnpGdkxIVDNsSkJTaytheXl2WHJJYmUvWEdoUU41ZzVGTlBUdDY3CklNd2JLOVVDZ1lFQTJRZjJINzlsVTk5QmV0Z1ZGNFVmaDNybitGNXdTeXUvMFRXaHRpNDlMeU1pQnJNRHNjM0QKZjU4bjloOTFIb1R4cUQyRmFnOXJva2RyVVNSTUkrbDdpQ0Ywd2xEZC9NdGQrOW1rbG1LMUQvaCt6MUhjTGY2UgpSY0VnNWtvYlN3R3poRWgvYXFmR3BtVmtka3cwNk1STEswTlRpcU9SUERsVEtMdTRqYzYyblA0PQotLS0tLUVORCBSU0EgUFJJVkFURSBLRVktLS0tLQo='```"
+            }
+        }
+            ]
+        }
+    ]
+}
+EOF
+}
+
+curl -i \
+-H "Accept: application/json" \
+-H "Content-Type:application/json" \
+-X POST --data "$(generate_post_data)" "https://hooks.slack.com/services/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"
+
+az resource list --resource-group $resourcegroupname --query "[?tags.k8s=='$clustername']" -o table
+
+kubectl describe pod/kube-flannel-ds-amd64-rjdrl -n kube-system
+
+cat > reset.sh <<EOF
+#!/bin/bash
+echo "y" | sudo kubeadm reset
+sudo rm /etc/cni/net.d -r
+sudo iptables -P INPUT ACCEPT
+sudo iptables -P FORWARD ACCEPT
+sudo iptables -P OUTPUT ACCEPT
+sudo iptables -t nat -F
+sudo iptables -t mangle -F
+sudo iptables -F
+sudo iptables -X
+EOF
+
+chmod 777 reset.sh
+
+az network vnet show --name vnet-p-we1-01 --resource-group rgp-p-we1-aziredevops-networking --query subnets[].id -o tsv | grep sub-p-we1-pubint1-44.130.44.0-23
