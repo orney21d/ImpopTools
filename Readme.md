@@ -13,7 +13,9 @@ Execute the script to decrapify windows 10 18xx/19xx. Use this:
    *alias.cmd* sets aliases   
    *addtoregistry.reg* tells windows to execute alias.cmd for every CMD open
 
-2. Place *Microsoft.PowerShell_profile.ps1* under *C:\Users\freei\Documents\WindowsPowerShell*
+2. Place *Microsoft.PowerShell_profile.ps1* under *%USERPROFILE%\Documents\WindowsPowerShell*
+
+3. Place .bash_profile under *%USERPROFILE%*
 
 
 # References
