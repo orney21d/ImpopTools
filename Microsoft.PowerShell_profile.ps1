@@ -16,6 +16,11 @@ Function ka_function {
     kubectl apply $a
 }
 
+Function kaw_function {
+    kubectl get pods -A -o wide
+}
+
 set-alias k kubectl
 set-alias kgp kgp_function
 set-alias ka ka_function
+set-alias kaw kaw_function
