@@ -21,3 +21,13 @@ Execute the script to decrapify windows 10 18xx/19xx. Use this:
 # References
 
 https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet
+
+
+# Fix DPI issues with RDP
+
+Folder FixRDPDPI
+
+Merge *PreferExternalManigest.reg*
+
+Copy *mstsc.exe.manifest* to *%SYSTEMROOT%\system32*
+
