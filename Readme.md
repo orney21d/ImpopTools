@@ -5,6 +5,9 @@ Execute the script to decrapify windows 10 18xx/19xx. Use this:
 ```powershell
  .\decrapfy.ps1 -onedrive -tablet
 ```
+For 2004 version
+
+https://github.com/farag2/Windows-10-Setup-Script
 
 # Aliases
 
